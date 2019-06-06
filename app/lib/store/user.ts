@@ -43,6 +43,8 @@ class User {
   public darkTheme: boolean = true;
 
   public isLoggedIn: boolean = false;
+  public isAzureUser: boolean = false;
+  public isGoogleUser: boolean = false;
 
   constructor(params) {
     this.store = params.store;
@@ -60,6 +62,8 @@ class User {
     this.stripeListOfInvoices = params.stripeListOfInvoices;
     this.darkTheme = !!params.darkTheme;
     this.isLoggedIn = !!params.isLoggedIn;
+    this.isAzureUser = !!params.isAzureUser;
+    this.isGoogleUser = !!params.isGoogleUser;
   }
 
   public async updateProfile({ name, avatarUrl }: { name: string; avatarUrl: string }) {
@@ -144,6 +148,8 @@ decorate(User, {
   stripeCard: observable,
   stripeListOfInvoices: observable,
   isLoggedIn: observable,
+  isAzureUser: observable,
+  isGoogleUser: observable,
 
   updateProfile: action,
   toggleTheme: action,
