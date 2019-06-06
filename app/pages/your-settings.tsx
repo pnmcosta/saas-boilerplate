@@ -56,6 +56,25 @@ class YourSettings extends React.Component<MyProps, MyState> {
     const { currentUser } = this.props.store;
     const { newName, newAvatarUrl } = this.state;
 
+    const oauths = [];
+    if (currentUser.isAzureUser) {
+      oauths.push(
+        <div key="azure">
+          <i className="material-icons" color="action"
+            style={{ verticalAlign: 'text-bottom' }} > done </i> You signed up on Async using your Azure account.
+        </div>,
+      );
+    }
+
+    if (currentUser.isGoogleUser) {
+      oauths.push(
+        <div key="google">
+          <i className="material-icons" color="action"
+            style={{ verticalAlign: 'text-bottom' }} > done </i> You signed up on Async using your Google account.
+        </div>,
+      );
+    }
+
     return (
       <Layout {...this.props}>
         <Head>
@@ -67,23 +86,18 @@ class YourSettings extends React.Component<MyProps, MyState> {
             <Grid item sm={12} xs={12} style={{ padding: '0px 20px' }}>
               <h3>Your Settings</h3>
               <h4 style={{ marginTop: '40px' }}>Your account</h4>
-              <p>
-                <i
-                  className="material-icons"
-                  color="action"
-                  style={{ verticalAlign: 'text-bottom' }}
-                >
-                  done
-                </i>{' '}
-                You signed up on Async using your Google account.
+              {oauths}
+
+              <ul style={{ paddingLeft: 20, marginTop: 0 }}>
                 <li>
-                  {' '}
-                  Your Google/Async email: <b>{currentUser.email}</b>
+                  Your email: <b>{currentUser.email}</b>
                 </li>
-                <li>
-                  Your Google/Async username: <b>{currentUser.displayName}</b>
-                </li>
-              </p>
+                {currentUser.displayName ?
+                  <li>
+                    Your display: <b>{currentUser.displayName}</b>
+                  </li>
+                  : ''}
+              </ul>
               <form onSubmit={this.onSubmit} autoComplete="off">
                 <h4>Your name</h4>
                 <TextField
