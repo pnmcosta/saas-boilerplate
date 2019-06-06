@@ -176,9 +176,9 @@ function setupGoogle({ ROOT_URL, server }) {
 
     try {
       const user = await User.signInOrSignUp(type, {
-        googleId: profile.id,
+        oauthId: profile.id,
         email,
-        googleToken: { accessToken, refreshToken },
+        oauthToken: { accessToken, refreshToken },
         displayName: profile.displayName,
         avatarUrl,
       });
@@ -216,19 +216,15 @@ function setupAzure({ ROOT_URL, server }) {
   const verify = async (accessToken, refreshToken, profile, verified) => {
     let email;
 
-    if (profile.mail) {
-      email = profile.mail;
-    }
-
-    if (!email && profile.userPrincipalName) {
-      email = profile.userPrincipalName;
+    if (profile.emails) {
+      email = profile.emails[0].value;
     }
 
     try {
       const user = await User.signInOrSignUp(type, {
-        azureId: profile.id,
+        oauthId: profile.id,
         email,
-        azureToken: { accessToken, refreshToken },
+        oauthToken: { accessToken, refreshToken },
         displayName: profile.displayName,
         avatarUrl: undefined,
       });

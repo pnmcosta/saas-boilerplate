@@ -195,21 +195,17 @@ interface IUserModel extends mongoose.Model<IUserDocument> {
   getTeamMembers({ userId, teamId }: { userId: string; teamId: string }): Promise<IUserDocument[]>;
 
   signInOrSignUp(type: string, {
-    azureId,
-    googleId,
+    oauthId,
     email,
-    googleToken,
-    azureToken,
+    oauthToken,
     displayName,
     avatarUrl,
   }: {
-    azureId?: string;
-    googleId?: string;
+    oauthId: string;
     email: string;
     displayName: string;
     avatarUrl: string;
-    googleToken?: { refreshToken?: string; accessToken?: string };
-    azureToken?: { refreshToken?: string; accessToken?: string };
+    oauthToken: { refreshToken?: string; accessToken?: string };
   }): Promise<IUserDocument>;
 
   signUpByEmail({ uid, email }: { uid: string; email: string }): Promise<IUserDocument>;
@@ -328,49 +324,42 @@ class UserClass extends mongoose.Model {
       .setOptions({ lean: true });
   }
 
-  public static async signInOrSignUp(type: string, { googleId, email, googleToken, displayName, avatarUrl,
-    azureId, azureToken }) {
+  public static async signInOrSignUp(type: string, { oauthId, email, oauthToken, displayName, avatarUrl }) {
 
-    const user = await this.findOne((type === 'google') ? { googleId } : { azureId })
-      .select(this.publicFields().join(' '))
+    if (!oauthId) {
+      throw new Error('oauthId is required');
+    }
+
+    // email is a unique constraint on the UserSchema
+    // if a user already exists with the same email
+    // if it does attach this signUp to it instead of creating a new account.
+    const user = await this.findOne({
+      $or: [
+        { email },
+        { [`${type}Id`]: oauthId },
+      ],
+    }, this.publicFields().concat(`${type}Id`))
       .setOptions({ lean: true });
 
     if (user) {
+
+      if (_.isEmpty(oauthToken)) {
+        return user;
+      }
       const modifier = {};
-      switch (type) {
-        case 'google':
-          if (_.isEmpty(googleToken)) {
-            return user;
-          }
-
-          if (googleToken.accessToken) {
-            modifier['googleToken.accessToken'] = googleToken.accessToken;
-          }
-
-          if (googleToken.refreshToken) {
-            modifier['googleToken.refreshToken'] = googleToken.refreshToken;
-          }
-
-          break;
-        case 'azure':
-          if (_.isEmpty(azureToken)) {
-            return user;
-          }
-
-          if (azureToken.accessToken) {
-            modifier['azureToken.accessToken'] = azureToken.accessToken;
-          }
-
-          if (azureToken.refreshToken) {
-            modifier['azureToken.refreshToken'] = azureToken.refreshToken;
-          }
-
-          break;
-        default:
-          return user;
+      if (!user[`${type}Id`]) {
+        modifier[`${type}Id`] = oauthId;
       }
 
-      await this.updateOne({ _id: user.id }, { $set: modifier });
+      if (oauthToken.accessToken) {
+        modifier[`${type}Token.accessToken`] = oauthToken.accessToken;
+      }
+
+      if (oauthToken.refreshToken) {
+        modifier[`${type}Token.refreshToken`] = oauthToken.refreshToken;
+      }
+
+      await this.updateOne({ _id: user._id }, { $set: modifier });
 
       return user;
     }
@@ -379,11 +368,9 @@ class UserClass extends mongoose.Model {
 
     const newUser = await this.create({
       createdAt: new Date(),
-      googleId,
-      azureId,
+      [`${type}Id`]: oauthId,
+      [`${type}Token`]: oauthToken,
       email,
-      googleToken,
-      azureToken,
       displayName,
       avatarUrl,
       slug,
