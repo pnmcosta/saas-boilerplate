@@ -33,6 +33,15 @@ const mongoSchema = new mongoose.Schema({
     accessToken: String,
     refreshToken: String,
   },
+  azureId: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
+  azureToken: {
+    accessToken: String,
+    refreshToken: String,
+  },
   slug: {
     type: String,
     required: true,
@@ -104,10 +113,21 @@ const mongoSchema = new mongoose.Schema({
   },
   darkTheme: Boolean,
 });
+mongoSchema.virtual('isAzureUser').get(function(this: IUserDocument) {
+  return this.azureId && this.azureId.length > 0;
+});
+mongoSchema.virtual('isGoogleUser').get(function(this: IUserDocument) {
+  return this.googleId && this.googleId.length > 0;
+});
+
+// mongoSchema.set('toObject', { virtuals: true });
+mongoSchema.set('toJSON', { virtuals: true });
 
 export interface IUserDocument extends mongoose.Document {
   googleId: string;
   googleToken: { accessToken: string; refreshToken: string };
+  azureId: string;
+  azureToken: { accessToken: string; refreshToken: string };
   slug: string;
   createdAt: Date;
 
@@ -174,18 +194,22 @@ interface IUserModel extends mongoose.Model<IUserDocument> {
 
   getTeamMembers({ userId, teamId }: { userId: string; teamId: string }): Promise<IUserDocument[]>;
 
-  signInOrSignUp({
+  signInOrSignUp(type: string, {
+    azureId,
     googleId,
     email,
     googleToken,
+    azureToken,
     displayName,
     avatarUrl,
   }: {
-    googleId: string;
+    azureId?: string;
+    googleId?: string;
     email: string;
     displayName: string;
     avatarUrl: string;
-    googleToken: { refreshToken?: string; accessToken?: string };
+    googleToken?: { refreshToken?: string; accessToken?: string };
+    azureToken?: { refreshToken?: string; accessToken?: string };
   }): Promise<IUserDocument>;
 
   signUpByEmail({ uid, email }: { uid: string; email: string }): Promise<IUserDocument>;
@@ -304,26 +328,49 @@ class UserClass extends mongoose.Model {
       .setOptions({ lean: true });
   }
 
-  public static async signInOrSignUp({ googleId, email, googleToken, displayName, avatarUrl }) {
-    const user = await this.findOne({ googleId })
+  public static async signInOrSignUp(type: string, { googleId, email, googleToken, displayName, avatarUrl,
+    azureId, azureToken }) {
+
+    const user = await this.findOne((type === 'google') ? { googleId } : { azureId })
       .select(this.publicFields().join(' '))
       .setOptions({ lean: true });
 
     if (user) {
-      if (_.isEmpty(googleToken)) {
-        return user;
-      }
-
       const modifier = {};
-      if (googleToken.accessToken) {
-        modifier['googleToken.accessToken'] = googleToken.accessToken;
+      switch (type) {
+        case 'google':
+          if (_.isEmpty(googleToken)) {
+            return user;
+          }
+
+          if (googleToken.accessToken) {
+            modifier['googleToken.accessToken'] = googleToken.accessToken;
+          }
+
+          if (googleToken.refreshToken) {
+            modifier['googleToken.refreshToken'] = googleToken.refreshToken;
+          }
+
+          break;
+        case 'azure':
+          if (_.isEmpty(azureToken)) {
+            return user;
+          }
+
+          if (azureToken.accessToken) {
+            modifier['azureToken.accessToken'] = azureToken.accessToken;
+          }
+
+          if (azureToken.refreshToken) {
+            modifier['azureToken.refreshToken'] = azureToken.refreshToken;
+          }
+
+          break;
+        default:
+          return user;
       }
 
-      if (googleToken.refreshToken) {
-        modifier['googleToken.refreshToken'] = googleToken.refreshToken;
-      }
-
-      await this.updateOne({ googleId }, { $set: modifier });
+      await this.updateOne({ _id: user.id }, { $set: modifier });
 
       return user;
     }
@@ -333,8 +380,10 @@ class UserClass extends mongoose.Model {
     const newUser = await this.create({
       createdAt: new Date(),
       googleId,
+      azureId,
       email,
       googleToken,
+      azureToken,
       displayName,
       avatarUrl,
       slug,
@@ -436,7 +485,8 @@ class UserClass extends mongoose.Model {
       'email',
       'avatarUrl',
       'slug',
-      'isGithubConnected',
+      'isAzureUser',
+      'isGoogleUser',
       'defaultTeamSlug',
       'hasCardInformation',
       'stripeCustomer',
