@@ -11,6 +11,7 @@ import User, { IUserDocument } from './models/User';
 import PasswordlessMongoStore from './passwordless';
 
 import {
+  AZURE_CLIENTID, AZURE_CLIENTSECRET,
   EMAIL_SUPPORT_FROM_ADDRESS, GOOGLE_CLIENTID,
   GOOGLE_CLIENTSECRET, MICROSOFT_CLIENTID,
   MICROSOFT_CLIENTSECRET, URL_APP,
