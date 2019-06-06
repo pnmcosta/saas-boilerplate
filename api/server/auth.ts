@@ -1,5 +1,6 @@
 import * as passport from 'passport';
-import { OAuth2Strategy as Strategy } from 'passport-google-oauth';
+import { OAuth2Strategy as GoogleStrategy } from 'passport-google-oauth';
+import { Strategy as MicrosoftStrategy } from 'passport-microsoft';
 import * as passwordless from 'passwordless';
 
 import sendEmail from './aws-ses';
@@ -10,6 +11,7 @@ import User, { IUserDocument } from './models/User';
 import PasswordlessMongoStore from './passwordless';
 
 import {
+  AZURE_CLIENTID, AZURE_CLIENTSECRET,
   EMAIL_SUPPORT_FROM_ADDRESS, GOOGLE_CLIENTID,
   GOOGLE_CLIENTSECRET, URL_APP,
 } from './consts';
@@ -88,70 +90,29 @@ function setupPasswordless({ server, ROOT_URL }) {
   });
 }
 
-function setupGoogle({ ROOT_URL, server }) {
+let passportInit = true;
+function setupPassport(type, server, options) {
 
-  if (!GOOGLE_CLIENTID) {
-    return;
+  if (passportInit) {
+    passport.serializeUser((user: IUserDocument, done) => {
+      done(null, user._id);
+    });
+
+    passport.deserializeUser((id, done) => {
+      // push the supported oauth's to the projection
+      // they are not in publicFields because the virtuals
+      // are used instead.
+      User.findById(id, User.publicFields().concat(['googleId', 'azureId']), (err, user) => {
+        done(err, user);
+      });
+    });
+
+    server.use(passport.initialize());
+    server.use(passport.session());
+    passportInit = false;
   }
 
-  const verify = async (accessToken, refreshToken, profile, verified) => {
-    let email;
-    let avatarUrl;
-
-    if (profile.emails) {
-      email = profile.emails[0].value;
-    }
-
-    if (profile.photos && profile.photos.length > 0) {
-      avatarUrl = profile.photos[0].value.replace('sz=50', 'sz=128');
-    }
-
-    try {
-      const user = await User.signInOrSignUp({
-        googleId: profile.id,
-        email,
-        googleToken: { accessToken, refreshToken },
-        displayName: profile.displayName,
-        avatarUrl,
-      });
-
-      verified(null, user);
-    } catch (err) {
-      verified(err);
-      logger.error(err);
-    }
-  };
-
-  passport.use(
-    new Strategy(
-      {
-        clientID: GOOGLE_CLIENTID,
-        clientSecret: GOOGLE_CLIENTSECRET,
-        callbackURL: `${ROOT_URL}/oauth2callback`,
-      },
-      verify,
-    ),
-  );
-
-  passport.serializeUser((user: IUserDocument, done) => {
-    done(null, user._id);
-  });
-
-  passport.deserializeUser((id, done) => {
-    User.findById(id, User.publicFields(), (err, user) => {
-      done(err, user);
-    });
-  });
-
-  server.use(passport.initialize());
-  server.use(passport.session());
-
-  server.get('/auth/google', (req, res, next) => {
-    const options = {
-      scope: ['profile', 'email'],
-      prompt: 'select_account',
-    };
-
+  server.get('/auth/' + type, (req, res, next) => {
     if (req.query && req.query.next && req.query.next.startsWith('/')) {
       req.session.next_url = req.query.next;
     } else {
@@ -164,12 +125,12 @@ function setupGoogle({ ROOT_URL, server }) {
       req.session.invitationToken = null;
     }
 
-    passport.authenticate('google', options)(req, res, next);
+    passport.authenticate(type, options)(req, res, next);
   });
 
   server.get(
-    '/oauth2callback',
-    passport.authenticate('google', {
+    '/oauth2' + type,
+    passport.authenticate(type, {
       failureRedirect: '/login',
     }),
     (req, res) => {
@@ -196,4 +157,103 @@ function setupGoogle({ ROOT_URL, server }) {
   );
 }
 
-export { setupPasswordless, setupGoogle };
+function setupGoogle({ ROOT_URL, server }) {
+  if (!GOOGLE_CLIENTID || !GOOGLE_CLIENTSECRET) { return; }
+
+  const type = 'google';
+
+  const verify = async (accessToken, refreshToken, profile, verified) => {
+    let email;
+    let avatarUrl;
+
+    if (profile.emails) {
+      email = profile.emails[0].value;
+    }
+
+    if (profile.photos && profile.photos.length > 0) {
+      avatarUrl = profile.photos[0].value.replace('sz=50', 'sz=128');
+    }
+
+    try {
+      const user = await User.signInOrSignUp(type, {
+        googleId: profile.id,
+        email,
+        googleToken: { accessToken, refreshToken },
+        displayName: profile.displayName,
+        avatarUrl,
+      });
+
+      verified(null, user);
+    } catch (err) {
+      verified(err);
+      logger.error(err);
+    }
+  };
+
+  passport.use(type,
+    new GoogleStrategy(
+      {
+        clientID: GOOGLE_CLIENTID,
+        clientSecret: GOOGLE_CLIENTSECRET,
+        callbackURL: `${ROOT_URL}/oauth2google`,
+      },
+      verify,
+    ),
+  );
+
+  const options = {
+    scope: ['profile', 'email'],
+    prompt: 'select_account',
+  };
+
+  setupPassport(type, server, options);
+}
+
+function setupAzure({ ROOT_URL, server }) {
+  if (!AZURE_CLIENTID || !AZURE_CLIENTSECRET) { return; }
+  const type = 'azure';
+
+  const verify = async (accessToken, refreshToken, profile, verified) => {
+    let email;
+
+    if (profile.mail) {
+      email = profile.mail;
+    }
+
+    if (!email && profile.userPrincipalName) {
+      email = profile.userPrincipalName;
+    }
+
+    try {
+      const user = await User.signInOrSignUp(type, {
+        azureId: profile.id,
+        email,
+        azureToken: { accessToken, refreshToken },
+        displayName: profile.displayName,
+        avatarUrl: undefined,
+      });
+
+      verified(null, user);
+    } catch (err) {
+      verified(err);
+      logger.error(err);
+    }
+  };
+
+  passport.use(type,
+    new MicrosoftStrategy(
+      {
+        clientID: AZURE_CLIENTID,
+        clientSecret: AZURE_CLIENTSECRET,
+        callbackURL: `${ROOT_URL}/oauth2azure`,
+      },
+      verify,
+    ),
+  );
+
+  const options = {
+    scope: ['user.read'],
+  };
+  setupPassport(type, server, options);
+}
+export { setupPasswordless, setupGoogle, setupAzure };
