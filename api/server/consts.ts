@@ -59,6 +59,9 @@ if (!sessionSecret) {
 
 export const SESSION_SECRET: string = sessionSecret;
 
+export const AZURE_CLIENTID: string = get('AZURE_CLIENTID');
+export const AZURE_CLIENTSECRET: string = get('AZURE_CLIENTSECRET');
+
 export const GOOGLE_CLIENTID: string = get('GOOGLE_CLIENTID') || get('Google_clientID');
 export const GOOGLE_CLIENTSECRET: string = get('GOOGLE_CLIENTSECRET') || get('Google_clientSecret');
 
