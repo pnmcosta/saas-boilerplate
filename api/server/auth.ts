@@ -11,9 +11,9 @@ import User, { IUserDocument } from './models/User';
 import PasswordlessMongoStore from './passwordless';
 
 import {
-  AZURE_CLIENTID, AZURE_CLIENTSECRET,
   EMAIL_SUPPORT_FROM_ADDRESS, GOOGLE_CLIENTID,
-  GOOGLE_CLIENTSECRET, URL_APP,
+  GOOGLE_CLIENTSECRET, MICROSOFT_CLIENTID,
+  MICROSOFT_CLIENTSECRET, URL_APP,
 } from './consts';
 
 function setupPasswordless({ server, ROOT_URL }) {
@@ -102,7 +102,7 @@ function setupPassport(type, server, options) {
       // push the supported oauth's to the projection
       // they are not in publicFields because the virtuals
       // are used instead.
-      User.findById(id, User.publicFields().concat(['googleId', 'azureId']), (err, user) => {
+      User.findById(id, User.publicFields().concat(['googleId', 'microsoftId']), (err, user) => {
         done(err, user);
       });
     });
@@ -209,9 +209,9 @@ function setupGoogle({ ROOT_URL, server }) {
   setupPassport(type, server, options);
 }
 
-function setupAzure({ ROOT_URL, server }) {
-  if (!AZURE_CLIENTID || !AZURE_CLIENTSECRET) { return; }
-  const type = 'azure';
+function setupMicrosoft({ ROOT_URL, server }) {
+  if (!MICROSOFT_CLIENTID || !MICROSOFT_CLIENTSECRET) { return; }
+  const type = 'microsoft';
 
   const verify = async (accessToken, refreshToken, profile, verified) => {
     let email;
@@ -239,9 +239,9 @@ function setupAzure({ ROOT_URL, server }) {
   passport.use(type,
     new MicrosoftStrategy(
       {
-        clientID: AZURE_CLIENTID,
-        clientSecret: AZURE_CLIENTSECRET,
-        callbackURL: `${ROOT_URL}/oauth2azure`,
+        clientID: MICROSOFT_CLIENTID,
+        clientSecret: MICROSOFT_CLIENTSECRET,
+        callbackURL: `${ROOT_URL}/oauth2microsoft`,
       },
       verify,
     ),
@@ -252,4 +252,4 @@ function setupAzure({ ROOT_URL, server }) {
   };
   setupPassport(type, server, options);
 }
-export { setupPasswordless, setupGoogle, setupAzure };
+export { setupPasswordless, setupGoogle, setupMicrosoft };

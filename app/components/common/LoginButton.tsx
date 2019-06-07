@@ -21,21 +21,28 @@ class LoginButton extends React.PureComponent<
   public render() {
     const { next, invitationToken } = this.props;
 
-    let url = `${URL_API}/auth/google`;
+    let urlGoogle = `${URL_API}/auth/google`;
+    let urlMicrosoft = `${URL_API}/auth/microsoft`;
+
     const qs = makeQueryString({ next, invitationToken });
 
     if (qs) {
-      url += `?${qs}`;
+      urlGoogle += `?${qs}`;
+      urlMicrosoft += `?${qs}`;
     }
 
     return (
       <React.Fragment>
-        <Button variant="contained" style={styleLoginButton} href={url}>
+        <Button variant="contained" style={styleLoginButton} href={urlGoogle}>
           <img
             src="https://storage.googleapis.com/async-await-all/G.svg"
             alt="Log in with Google"
           />
           &nbsp;&nbsp;&nbsp; Log in with Google
+        </Button>
+        <p />
+        <Button variant="contained" style={{ ...styleLoginButton, backgroundColor: '#0067b8' }} href={urlMicrosoft}>
+          &nbsp;&nbsp;&nbsp; Log in with Microsoft
         </Button>
         <p />
         <br />
