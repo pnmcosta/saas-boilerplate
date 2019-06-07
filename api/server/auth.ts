@@ -220,6 +220,11 @@ function setupMicrosoft({ ROOT_URL, server }) {
       email = profile.emails[0].value;
     }
 
+    // fix https://github.com/seanfisher/passport-microsoft/issues/4
+    if (!email && profile._json && profile._json.userPrincipalName) {
+      email = profile._json.userPrincipalName;
+    }
+
     try {
       const user = await User.signInOrSignUp(type, {
         oauthId: profile.id,
