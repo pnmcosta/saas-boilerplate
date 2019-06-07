@@ -33,12 +33,12 @@ const mongoSchema = new mongoose.Schema({
     accessToken: String,
     refreshToken: String,
   },
-  azureId: {
+  microsoftId: {
     type: String,
     unique: true,
     sparse: true,
   },
-  azureToken: {
+  microsoftToken: {
     accessToken: String,
     refreshToken: String,
   },
@@ -114,7 +114,7 @@ const mongoSchema = new mongoose.Schema({
   darkTheme: Boolean,
 });
 mongoSchema.virtual('isAzureUser').get(function(this: IUserDocument) {
-  return this.azureId && this.azureId.length > 0;
+  return this.microsoftId && this.microsoftId.length > 0;
 });
 mongoSchema.virtual('isGoogleUser').get(function(this: IUserDocument) {
   return this.googleId && this.googleId.length > 0;
@@ -126,8 +126,8 @@ mongoSchema.set('toJSON', { virtuals: true });
 export interface IUserDocument extends mongoose.Document {
   googleId: string;
   googleToken: { accessToken: string; refreshToken: string };
-  azureId: string;
-  azureToken: { accessToken: string; refreshToken: string };
+  microsoftId: string;
+  microsoftToken: { accessToken: string; refreshToken: string };
   slug: string;
   createdAt: Date;
 

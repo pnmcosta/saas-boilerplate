@@ -11,7 +11,7 @@ import * as mongoose from 'mongoose';
 import * as path from 'path';
 
 import api from './api';
-import { setupAzure, setupGoogle, setupPasswordless } from './auth';
+import { setupGoogle, setupMicrosoft, setupPasswordless } from './auth';
 import { signRequestForLoad } from './aws-s3';
 import { setup as realtime } from './realtime';
 import { stripeWebHooks } from './stripe';
@@ -70,7 +70,7 @@ const sessionMiddleware = session(sessionOptions);
 server.use(sessionMiddleware);
 
 setupGoogle({ server, ROOT_URL });
-setupAzure({ server, ROOT_URL });
+setupMicrosoft({ server, ROOT_URL });
 setupPasswordless({ server, ROOT_URL });
 
 api(server);
