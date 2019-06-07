@@ -22,6 +22,7 @@ const styleLoginButton = {
   letterSpacing: '0.01em',
   color: '#fff',
   backgroundColor: '#DF4930',
+  minWidth: 245,
 };
 
 const styleTextField = {

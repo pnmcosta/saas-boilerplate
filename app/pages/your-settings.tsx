@@ -59,7 +59,7 @@ class YourSettings extends React.Component<MyProps, MyState> {
     const oauths = [];
     if (currentUser.isAzureUser) {
       oauths.push(
-        <div key="azure">
+        <div key="microsoft">
           <i className="material-icons" color="action"
             style={{ verticalAlign: 'text-bottom' }} > done </i> You signed up on Async using your Azure account.
         </div>,
@@ -94,7 +94,7 @@ class YourSettings extends React.Component<MyProps, MyState> {
                 </li>
                 {currentUser.displayName ?
                   <li>
-                    Your display: <b>{currentUser.displayName}</b>
+                    Your name: <b>{currentUser.displayName}</b>
                   </li>
                   : ''}
               </ul>
