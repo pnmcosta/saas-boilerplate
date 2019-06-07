@@ -39,8 +39,8 @@ class CreateTeam extends React.Component<MyProps> {
       notify('Team name is required.');
       return;
     }
-
-    const file = document.getElementById('upload-file').files[0];
+    const inputFile = (document.getElementById('upload-file') as HTMLInputElement);
+    const file = inputFile.files[0];
 
     try {
       this.setState({ disabled: true });
@@ -80,7 +80,7 @@ class CreateTeam extends React.Component<MyProps> {
         newAvatarUrl: 'https://storage.googleapis.com/async-await/default-user.png?v=1',
       });
 
-      document.getElementById('upload-file').value = '';
+      inputFile.value = '';
 
       Router.push(`/team/${team.slug}/team-settings`);
 
@@ -94,7 +94,8 @@ class CreateTeam extends React.Component<MyProps> {
   };
 
   public previewAvatar = () => {
-    const file = document.getElementById('upload-file').files[0];
+    const inputFile = (document.getElementById('upload-file') as HTMLInputElement);
+    const file = inputFile.files[0];
     if (!file) {
       return;
     }
@@ -102,7 +103,8 @@ class CreateTeam extends React.Component<MyProps> {
     const reader = new FileReader();
 
     reader.onload = e => {
-      this.setState({ newAvatarUrl: e.target.result });
+      // TODO: try to find what the actual e.target is supposed to be
+      this.setState({ newAvatarUrl: (e.target as any).result });
     };
 
     reader.readAsDataURL(file);
