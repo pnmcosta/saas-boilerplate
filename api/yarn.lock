@@ -3736,6 +3736,11 @@ mongodb@^2.0.36:
     mongodb-core "2.1.20"
     readable-stream "2.2.7"
 
+mongoose-field-encryption@2.3.4:
+  version "2.3.4"
+  resolved "https://registry.yarnpkg.com/mongoose-field-encryption/-/mongoose-field-encryption-2.3.4.tgz#cbfeefe128fc329b6d69971bb84482a0a2348668"
+  integrity sha512-MkidNGf41x2eIkb0Q2sxUH2n9fHz0yUvRChjom0HebM0z/8LGAyDQIrAADeHYiXYQLFGJhcK2reZzsj70J4hVg==
+
 mongoose-legacy-pluralize@1.0.2:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/mongoose-legacy-pluralize/-/mongoose-legacy-pluralize-1.0.2.tgz#3ba9f91fa507b5186d399fb40854bff18fb563e4"

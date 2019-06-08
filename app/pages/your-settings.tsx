@@ -57,7 +57,7 @@ class YourSettings extends React.Component<MyProps, MyState> {
     const { newName, newAvatarUrl } = this.state;
 
     const oauths = [];
-    if (currentUser.isAzureUser) {
+    if (currentUser.isMicrosoftUser) {
       oauths.push(
         <div key="microsoft">
           <i className="material-icons" color="action"

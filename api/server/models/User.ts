@@ -1,6 +1,7 @@
 import * as _ from 'lodash';
 import * as mongoose from 'mongoose';
 
+import { fieldEncryption } from 'mongoose-field-encryption';
 import sendEmail from '../aws-ses';
 import logger from '../logs';
 import { subscribe } from '../mailchimp';
@@ -18,7 +19,8 @@ import {
 } from '../stripe';
 
 import {
-  EMAIL_SUPPORT_FROM_ADDRESS,
+  EMAIL_SUPPORT_FROM_ADDRESS, ENCRYPT_SECRET,
+  GOOGLE_CLIENTID, MICROSOFT_CLIENTID,
 } from '../consts';
 
 mongoose.set('useFindAndModify', false);
@@ -29,18 +31,20 @@ const mongoSchema = new mongoose.Schema({
     unique: true,
     sparse: true,
   },
-  googleToken: {
-    accessToken: String,
-    refreshToken: String,
-  },
   microsoftId: {
     type: String,
     unique: true,
     sparse: true,
   },
-  microsoftToken: {
-    accessToken: String,
-    refreshToken: String,
+  oAuthAccessToken: {
+    type: Map,
+    of: String,
+    default: undefined,
+  },
+  oAuthRefreshToken: {
+    type: Map,
+    of: String,
+    default: undefined,
   },
   slug: {
     type: String,
@@ -113,21 +117,12 @@ const mongoSchema = new mongoose.Schema({
   },
   darkTheme: Boolean,
 });
-mongoSchema.virtual('isAzureUser').get(function(this: IUserDocument) {
-  return this.microsoftId && this.microsoftId.length > 0;
-});
-mongoSchema.virtual('isGoogleUser').get(function(this: IUserDocument) {
-  return this.googleId && this.googleId.length > 0;
-});
-
-// mongoSchema.set('toObject', { virtuals: true });
-mongoSchema.set('toJSON', { virtuals: true });
 
 export interface IUserDocument extends mongoose.Document {
-  googleId: string;
-  googleToken: { accessToken: string; refreshToken: string };
-  microsoftId: string;
-  microsoftToken: { accessToken: string; refreshToken: string };
+  googleId?: string;
+  microsoftId?: string;
+  oAuthAccessToken?: [Map<string, string>];
+  oAuthRefreshToken?: [Map<string, string>];
   slug: string;
   createdAt: Date;
 
@@ -181,7 +176,7 @@ export interface IUserDocument extends mongoose.Document {
 
 interface IUserModel extends mongoose.Model<IUserDocument> {
   publicFields(): string[];
-
+  oAuthFields(includeTokens?: boolean): string[];
   updateProfile({
     userId,
     name,
@@ -329,34 +324,41 @@ class UserClass extends mongoose.Model {
     if (!oauthId) {
       throw new Error('oauthId is required');
     }
+    const oAuthFields = {
+      Id: `${type}Id`,
+      AccessToken: `oAuthAccessToken.${type}`,
+      RefreshToken: `oAuthRefreshToken.${type}`,
+    };
 
     // email is a unique constraint on the UserSchema
-    // if a user already exists with the same email
-    // if it does attach this signUp to it instead of creating a new account.
+    // if a user already exists with the same email it
+    // attaches this oAuth account to it instead of creating a new account.
+    // can't be a lean query cause we need the tokens unencrypted here.
     const user = await this.findOne({
       $or: [
         { email },
-        { [`${type}Id`]: oauthId },
+        { [oAuthFields.Id]: oauthId },
       ],
-    }, this.publicFields().concat(`${type}Id`))
-      .setOptions({ lean: true });
+    }, this.oAuthFields(true));
 
     if (user) {
 
       if (_.isEmpty(oauthToken)) {
         return user;
       }
-      const modifier = {};
-      if (!user[`${type}Id`]) {
-        modifier[`${type}Id`] = oauthId;
+      const modifier: any = {};
+      if (!user.get(oAuthFields.Id)) {
+        modifier[oAuthFields.Id] = oauthId;
       }
 
       if (oauthToken.accessToken) {
-        modifier[`${type}Token.accessToken`] = oauthToken.accessToken;
+        modifier[oAuthFields.AccessToken] = oauthToken.accessToken;
+        modifier.__enc_oAuthAccessToken = false; // trigger new encryption
       }
 
       if (oauthToken.refreshToken) {
-        modifier[`${type}Token.refreshToken`] = oauthToken.refreshToken;
+        modifier[oAuthFields.RefreshToken] = oauthToken.refreshToken;
+        modifier.__enc_oAuthRefreshToken = false; // trigger new encryption
       }
 
       await this.updateOne({ _id: user._id }, { $set: modifier });
@@ -366,16 +368,26 @@ class UserClass extends mongoose.Model {
 
     const slug = await generateSlug(this, displayName);
 
-    const newUser = await this.create({
+    const newUser = new User({
       createdAt: new Date(),
-      [`${type}Id`]: oauthId,
-      [`${type}Token`]: oauthToken,
       email,
       displayName,
       avatarUrl,
       slug,
       defaultTeamSlug: '',
     });
+
+    newUser.set(oAuthFields.Id, oauthId);
+
+    if (oauthToken.accessToken) {
+      newUser.set(oAuthFields.AccessToken, oauthToken.accessToken);
+    }
+
+    if (oauthToken.refreshToken) {
+      newUser.set(oAuthFields.RefreshToken, oauthToken.refreshToken);
+    }
+
+    await newUser.save();
 
     const hasInvitation = (await Invitation.countDocuments({ email })) > 0;
 
@@ -408,7 +420,8 @@ class UserClass extends mongoose.Model {
       logger.error('Mailchimp error:', error);
     }
 
-    return _.pick(newUser, this.publicFields());
+    // return the oauth fields but without the tokens
+    return _.pick(newUser, this.oAuthFields());
   }
 
   public static async signUpByEmail({ uid, email }) {
@@ -472,7 +485,7 @@ class UserClass extends mongoose.Model {
       'email',
       'avatarUrl',
       'slug',
-      'isAzureUser',
+      'isMicrosoftUser',
       'isGoogleUser',
       'defaultTeamSlug',
       'hasCardInformation',
@@ -482,7 +495,22 @@ class UserClass extends mongoose.Model {
       'darkTheme',
     ];
   }
-
+  public static oAuthFields(includeTokens = false): string[] {
+    const fields = this.publicFields();
+    if (MICROSOFT_CLIENTID) {
+      fields.push('microsoftId');
+    }
+    if (GOOGLE_CLIENTID) {
+      fields.push('googleId');
+    }
+    if (!includeTokens || (!MICROSOFT_CLIENTID && !GOOGLE_CLIENTID)) {
+      return fields;
+    }
+    return fields.concat([
+      'oAuthAccessToken',
+      'oAuthRefreshToken',
+    ]);
+  }
   public static async checkPermissionAndGetTeam({ userId, teamId }) {
     if (!userId || !teamId) {
       throw new Error('Bad data');
@@ -504,6 +532,24 @@ class UserClass extends mongoose.Model {
   }
 }
 
+if (GOOGLE_CLIENTID || MICROSOFT_CLIENTID) {
+  // set virtual to be exported to APP (via JSON endpoints)
+  mongoSchema.set('toJSON', { virtuals: true });
+  if (MICROSOFT_CLIENTID) {
+    mongoSchema.virtual('isMicrosoftUser').get(function(this: IUserDocument) {
+      return this.microsoftId && this.microsoftId.length > 0;
+    });
+  }
+  if (GOOGLE_CLIENTID) {
+    mongoSchema.virtual('isGoogleUser').get(function(this: IUserDocument) {
+      return this.googleId && this.googleId.length > 0;
+    });
+  }
+  // setup field encryption
+  mongoSchema.plugin(fieldEncryption, {
+    fields: ['oAuthAccessToken', 'oAuthRefreshToken'], secret: ENCRYPT_SECRET,
+  });
+}
 mongoSchema.loadClass(UserClass);
 
 const User = mongoose.model<IUserDocument, IUserModel>('User', mongoSchema);
