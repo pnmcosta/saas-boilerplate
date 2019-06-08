@@ -58,6 +58,7 @@ if (!sessionSecret) {
 }
 
 export const SESSION_SECRET: string = sessionSecret;
+export const ENCRYPT_SECRET: string = get('ENCRYPT_SECRET', true);
 
 export const MICROSOFT_CLIENTID: string = get('MICROSOFT_CLIENTID');
 export const MICROSOFT_CLIENTSECRET: string = get('MICROSOFT_CLIENTSECRET');

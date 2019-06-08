@@ -99,10 +99,8 @@ function setupPassport(type, server, options) {
     });
 
     passport.deserializeUser((id, done) => {
-      // push the supported oauth's to the projection
-      // they are not in publicFields because the virtuals
-      // are used instead.
-      User.findById(id, User.publicFields().concat(['googleId', 'microsoftId']), (err, user) => {
+      // push the oAuthFields instead of the publicFields to the projection
+      User.findById(id, User.oAuthFields(), (err, user) => {
         done(err, user);
       });
     });
