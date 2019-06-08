@@ -23,7 +23,7 @@
   },
   "husky": {
     "hooks": {
-      "pre-commit": "yarn lint && yarn build && cd ../app && yarn lint"
+      "pre-commit": "yarn lint && cd ../app && yarn lint"
     }
   },
   "jest": {
