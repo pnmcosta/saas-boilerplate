@@ -178,8 +178,6 @@ export interface IUserDocument extends mongoose.Document {
 }
 
 interface IUserModel extends mongoose.Model<IUserDocument> {
-  publicFields(): string[];
-  oAuthFields(): string[];
   updateProfile({
     userId,
     name,
@@ -241,8 +239,7 @@ class UserClass extends mongoose.Model {
     }
 
     return this.findByIdAndUpdate(userId, { $set: modifier }, { new: true, runValidators: true })
-      .select('displayName avatarUrl slug')
-      .setOptions({ lean: true });
+      .select('displayName avatarUrl slug').lean();
   }
 
   public static async createCustomer({ userId, stripeToken }) {
@@ -264,8 +261,7 @@ class UserClass extends mongoose.Model {
     const modifier = { stripeCustomer: customerObj, stripeCard: cardObj, hasCardInformation: true };
 
     return this.findByIdAndUpdate(userId, { $set: modifier }, { new: true, runValidators: true })
-      .select('stripeCustomer stripeCard hasCardInformation')
-      .setOptions({ lean: true });
+      .select('stripeCustomer stripeCard hasCardInformation').lean();
   }
 
   public static async createNewCardUpdateCustomer({ userId, stripeToken }) {
@@ -289,7 +285,7 @@ class UserClass extends mongoose.Model {
 
     return this.findByIdAndUpdate(userId, { $set: modifier }, { new: true, runValidators: true })
       .select('stripeCard')
-      .setOptions({ lean: true });
+      .lean();
   }
 
   public static async getListOfInvoicesForCustomer({ userId }) {
@@ -310,16 +306,13 @@ class UserClass extends mongoose.Model {
     }
 
     return this.findByIdAndUpdate(userId, { $set: modifier }, { new: true, runValidators: true })
-      .select('stripeListOfInvoices')
-      .setOptions({ lean: true });
+      .select('stripeListOfInvoices').lean();
   }
 
   public static async getTeamMembers({ userId, teamId }) {
     const team = await this.checkPermissionAndGetTeam({ userId, teamId });
 
-    return this.find({ _id: { $in: team.memberIds } })
-      .select(this.publicFields().join(' '))
-      .setOptions({ lean: true });
+    return this.find({ _id: { $in: team.memberIds } }).lean();
   }
 
   public static async signInOrSignUp(type: string, { oauthId, email, oauthToken, displayName, avatarUrl }) {
@@ -336,7 +329,7 @@ class UserClass extends mongoose.Model {
     // email is a unique constraint on the UserSchema
     // if a user already exists with the same email it
     // attaches this oAuth account to it instead of creating a new account.
-    // can't be a lean query, or have projections, cause we need the tokens unencrypted here.
+    // can't be a lean query, cause we need the document to update properly.
     const user = await this.findOne({
       $or: [
         { email },
@@ -364,9 +357,7 @@ class UserClass extends mongoose.Model {
       }
 
       await user.save();
-      user.decryptFieldsSync();
-      user.stripEncryptionFieldMarkers();
-      return user;
+      return user.toObject();
     }
 
     const slug = await generateSlug(this, displayName);
@@ -394,9 +385,7 @@ class UserClass extends mongoose.Model {
 
     const hasInvitation = (await Invitation.countDocuments({ email })) > 0;
 
-    const emailTemplate = await EmailTemplate.findOne({ name: 'welcome' }).setOptions({
-      lean: true,
-    });
+    const emailTemplate = await EmailTemplate.findOne({ name: 'welcome' }).lean();
 
     if (!emailTemplate) {
       throw new Error('welcome Email template not found');
@@ -423,16 +412,11 @@ class UserClass extends mongoose.Model {
       logger.error('Mailchimp error:', error);
     }
 
-    // return the oauth fields but without the tokens
-    newUser.decryptFieldsSync();
-    newUser.stripEncryptionFieldMarkers();
-    return newUser;
+    return newUser.toObject();
   }
 
   public static async signUpByEmail({ uid, email }) {
-    const user = await this.findOne({ email })
-      .select(this.publicFields().join(' '))
-      .setOptions({ lean: true });
+    const user = await this.findOne({ email }).lean();
 
     if (user) {
       throw Error('User already exists');
@@ -450,9 +434,7 @@ class UserClass extends mongoose.Model {
 
     const hasInvitation = (await Invitation.countDocuments({ email })) > 0;
 
-    const emailTemplate = await EmailTemplate.findOne({ name: 'welcome' }).setOptions({
-      lean: true,
-    });
+    const emailTemplate = await EmailTemplate.findOne({ name: 'welcome' }).lean();
 
     if (!emailTemplate) {
       throw new Error('welcome Email template not found');
@@ -479,45 +461,16 @@ class UserClass extends mongoose.Model {
       logger.error('Mailchimp error:', error);
     }
 
-    return _.pick(newUser, this.publicFields());
+    return newUser.toObject();
   }
 
-  public static publicFields(): string[] {
-    return [
-      '_id',
-      'id',
-      'displayName',
-      'email',
-      'avatarUrl',
-      'slug',
-      'isMicrosoftUser',
-      'isGoogleUser',
-      'defaultTeamSlug',
-      'hasCardInformation',
-      'stripeCustomer',
-      'stripeCard',
-      'stripeListOfInvoices',
-      'darkTheme',
-    ];
-  }
-  public static oAuthFields(): string[] {
-    const fields = this.publicFields();
-    if (MICROSOFT_CLIENTID) {
-      fields.push('microsoftId');
-    }
-    if (GOOGLE_CLIENTID) {
-      fields.push('googleId');
-    }
-    return fields;
-  }
   public static async checkPermissionAndGetTeam({ userId, teamId }) {
     if (!userId || !teamId) {
       throw new Error('Bad data');
     }
 
     const team = await Team.findById(teamId)
-      .select('memberIds')
-      .setOptions({ lean: true });
+      .select('memberIds').lean();
 
     if (!team || team.memberIds.indexOf(userId) === -1) {
       throw new Error('Team not found');
@@ -531,19 +484,48 @@ class UserClass extends mongoose.Model {
   }
 }
 
-if (GOOGLE_CLIENTID || MICROSOFT_CLIENTID) {
-  // set virtual to be exported to APP (via JSON endpoints)
-  mongoSchema.set('toJSON', { virtuals: true });
-  if (MICROSOFT_CLIENTID) {
-    mongoSchema.virtual('isMicrosoftUser').get(function(this: IUserDocument) {
-      return this.microsoftId && this.microsoftId.length > 0;
-    });
-  }
-  if (GOOGLE_CLIENTID) {
-    mongoSchema.virtual('isGoogleUser').get(function(this: IUserDocument) {
-      return this.googleId && this.googleId.length > 0;
-    });
-  }
+mongoSchema.set('toObject', {
+  virtuals: true,
+  versionKey: false,
+  // tslint:disable-next-line: variable-name
+  transform: (doc: any, _ret: any, _options: any) => {
+    doc.decryptFieldsSync();
+    doc.stripEncryptionFieldMarkers();
+    return doc.toObject({ transform: false });
+  },
+});
+
+mongoSchema.set('toJSON', {
+  virtuals: !!(MICROSOFT_CLIENTID || GOOGLE_CLIENTID),
+  versionKey: false,
+  // tslint:disable-next-line: variable-name
+  transform: (_doc: any, ret: any, _options: any) => {
+    // NOTE: front-end requires both ._id and .id
+    delete ret.oAuthAccessToken;
+    delete ret.__enc_oAuthAccessToken_d;
+    delete ret.__enc_oAuthAccessToken;
+    delete ret.oAuthRefreshToken;
+    delete ret.__enc_oAuthRefreshToken_d;
+    delete ret.__enc_oAuthRefreshToken;
+    delete ret.googleId;
+    delete ret.microsoftId;
+    delete ret.createdAt;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+if (MICROSOFT_CLIENTID) {
+  mongoSchema.virtual('isMicrosoftUser').get(function(this: IUserDocument) {
+    return this.microsoftId && this.microsoftId.length > 0;
+  });
+}
+if (GOOGLE_CLIENTID) {
+  mongoSchema.virtual('isGoogleUser').get(function(this: IUserDocument) {
+    return this.googleId && this.googleId.length > 0;
+  });
+}
+if (MICROSOFT_CLIENTID || GOOGLE_CLIENTID) {
   // setup field encryption
   mongoSchema.plugin(fieldEncryption, {
     fields: ['oAuthAccessToken', 'oAuthRefreshToken'], secret: ENCRYPT_SECRET,
