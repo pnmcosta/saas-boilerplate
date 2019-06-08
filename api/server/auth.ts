@@ -49,8 +49,8 @@ function setupPasswordless({ server, ROOT_URL }) {
 
   server.use((req, __, next) => {
     if (req.user && typeof req.user === 'string') {
-      User.findById(req.user, User.publicFields(), (err, user) => {
-        req.user = user;
+      User.findById(req.user, (err, user) => {
+        req.user = user.toJSON();
         next(err);
       });
     } else {
@@ -99,9 +99,8 @@ function setupPassport(type, server, options) {
     });
 
     passport.deserializeUser((id, done) => {
-      // push the oAuthFields instead of the publicFields to the projection
-      User.findById(id, User.oAuthFields(), (err, user) => {
-        done(err, user);
+      User.findById(id, (err, user) => {
+        done(err, user.toJSON());
       });
     });
 
