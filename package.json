@@ -24,6 +24,7 @@
     "clean:volumes": "docker volume ls -qf dangling=true | xargs -r docker volume rm",
     "sh:api": "docker-compose exec saas-api sh",
     "sh:app": "docker-compose exec saas-app sh",
+    "sh:db": "docker-compose exec saas-mongo sh",
     "tree": "tree -a -L 4 -I 'node_modules|.git|.next|production-server' -v --dirsfirst"
   },
   "keywords": [
