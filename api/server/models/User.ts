@@ -172,11 +172,14 @@ export interface IUserDocument extends mongoose.Document {
     ];
   };
   darkTheme: boolean;
+  decryptFieldsSync(): void;
+  encryptFieldsSync(): void;
+  stripEncryptionFieldMarkers(): void;
 }
 
 interface IUserModel extends mongoose.Model<IUserDocument> {
   publicFields(): string[];
-  oAuthFields(includeTokens?: boolean): string[];
+  oAuthFields(): string[];
   updateProfile({
     userId,
     name,
@@ -333,36 +336,36 @@ class UserClass extends mongoose.Model {
     // email is a unique constraint on the UserSchema
     // if a user already exists with the same email it
     // attaches this oAuth account to it instead of creating a new account.
-    // can't be a lean query cause we need the tokens unencrypted here.
+    // can't be a lean query, or have projections, cause we need the tokens unencrypted here.
     const user = await this.findOne({
       $or: [
         { email },
         { [oAuthFields.Id]: oauthId },
       ],
-    }, this.oAuthFields(true));
+    });
 
     if (user) {
 
       if (_.isEmpty(oauthToken)) {
         return user;
       }
-      const modifier: any = {};
       if (!user.get(oAuthFields.Id)) {
-        modifier[oAuthFields.Id] = oauthId;
+        user.set(oAuthFields.Id, oauthId);
       }
 
       if (oauthToken.accessToken) {
-        modifier[oAuthFields.AccessToken] = oauthToken.accessToken;
-        modifier.__enc_oAuthAccessToken = false; // trigger new encryption
+        user.set(oAuthFields.AccessToken, oauthToken.accessToken);
+        user.__enc_oAuthAccessToken = false; // trigger new encryption
       }
 
       if (oauthToken.refreshToken) {
-        modifier[oAuthFields.RefreshToken] = oauthToken.refreshToken;
-        modifier.__enc_oAuthRefreshToken = false; // trigger new encryption
+        user.set(oAuthFields.RefreshToken, oauthToken.refreshToken);
+        user.__enc_oAuthRefreshToken = false; // trigger new encryption
       }
 
-      await this.updateOne({ _id: user._id }, { $set: modifier });
-
+      await user.save();
+      user.decryptFieldsSync();
+      user.stripEncryptionFieldMarkers();
       return user;
     }
 
@@ -421,7 +424,9 @@ class UserClass extends mongoose.Model {
     }
 
     // return the oauth fields but without the tokens
-    return _.pick(newUser, this.oAuthFields());
+    newUser.decryptFieldsSync();
+    newUser.stripEncryptionFieldMarkers();
+    return newUser;
   }
 
   public static async signUpByEmail({ uid, email }) {
@@ -495,7 +500,7 @@ class UserClass extends mongoose.Model {
       'darkTheme',
     ];
   }
-  public static oAuthFields(includeTokens = false): string[] {
+  public static oAuthFields(): string[] {
     const fields = this.publicFields();
     if (MICROSOFT_CLIENTID) {
       fields.push('microsoftId');
@@ -503,13 +508,7 @@ class UserClass extends mongoose.Model {
     if (GOOGLE_CLIENTID) {
       fields.push('googleId');
     }
-    if (!includeTokens || (!MICROSOFT_CLIENTID && !GOOGLE_CLIENTID)) {
-      return fields;
-    }
-    return fields.concat([
-      'oAuthAccessToken',
-      'oAuthRefreshToken',
-    ]);
+    return fields;
   }
   public static async checkPermissionAndGetTeam({ userId, teamId }) {
     if (!userId || !teamId) {
